@@ -1,7 +1,56 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Bar, Chart } from 'react-chartjs-2';
 import styled, { keyframes } from 'styled-components';
+import Chart from 'chart.js/auto';
+
+// Keyframes for gradient animation
+const gradientAnimation = keyframes`
+  0% {
+    background: linear-gradient(120deg, #f6d365 0%, #fda085 100%);
+  }
+  50% {
+    background: linear-gradient(120deg, #fda085 0%, #f6d365 100%);
+  }
+  100% {
+    background: linear-gradient(120deg, #f6d365 0%, #fda085 100%);
+  }
+`;
+
+// Keyframes for noise animation
+const noiseAnimation = keyframes`
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 100% 100%;
+  }
+`;
+
+// AppContainer styled-component
+const AppContainer = styled.div`
+  font-family: 'Roboto', sans-serif;
+  text-align: center;
+  padding: 20px;
+  position: relative;
+  background: linear-gradient(120deg, #f6d365 0%, #fda085 100%);
+  background-size: 200% 200%;
+  animation: ${gradientAnimation} 10s ease infinite;
+  min-height: 100vh;
+  box-sizing: border-box;
+`;
+
+// Noise overlay styled-component
+const NoiseOverlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: url('data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIj8 ... ') repeat;
+  opacity: 0.1;
+  animation: ${noiseAnimation} 1s infinite linear;
+`;
 
 const fadeIn = keyframes`
   from {
@@ -10,14 +59,6 @@ const fadeIn = keyframes`
   to {
     opacity: 1;
   }
-`;
-
-const AppContainer = styled.div`
-  font-family: 'Roboto', sans-serif;
-  text-align: center;
-  padding: 20px;
-  background: linear-gradient(135deg, #f6f8f9, #e0eafc);
-  min-height: 100vh;
 `;
 
 const Title = styled.h1`
@@ -56,19 +97,74 @@ const FilterLabel = styled.label`
   }
 `;
 
+const ChartsContainer = styled.div`
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+`;
+
 const ChartContainer = styled.div`
-  border: 1px solid #ccc;
-  border-radius: 10px;
+  border: none;
+  border-radius: 15px;
   padding: 20px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  background: #fff;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.95);
   transition: all 0.3s ease;
   &:hover {
     transform: translateY(-5px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
   }
   animation: ${fadeIn} 1s ease-in-out;
+  width: 100%;
+  max-width: 1200px;
 `;
+
+
+
+const Chart2Container = styled.div`
+border: none;
+border-radius: 15px;
+padding: 20px;
+box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+background: rgba(255, 255, 255, 0.95);
+transition: all 0.3s ease;
+&:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+}
+animation: ${fadeIn} 1s ease-in-out;
+width: 100%;
+max-width: 500px;
+height:200px;
+margin-top: -285px;
+`;
+
+const PolarChartContainer = styled.div`
+
+border: none;
+border-radius: 15px;
+padding: 20px;
+box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+background: rgba(255, 255, 255, 0.95);
+transition: all 0.3s ease;
+&:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+}
+animation: ${fadeIn} 1s ease-in-out;
+width: 100%;
+max-width: 500px;
+height:200px;
+margin-top: -285px;
+margin-left: 1300px
+
+`;
+
+
+
 
 const AnimatedCanvas = styled.canvas`
   opacity: 0;
@@ -76,6 +172,13 @@ const AnimatedCanvas = styled.canvas`
   &.fadeIn {
     opacity: 1;
   }
+`;
+
+const LoaderContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 500px;
 `;
 
 function App() {
@@ -90,8 +193,12 @@ function App() {
   const [SWOTFilter, setSWOTFilter] = useState('');
   const [countryFilter, setCountryFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
-  const chartRef = useRef(null);
-  const [chartInstance, setChartInstance] = useState(null);
+  const barChartRef = useRef(null);
+  const pieChartRef = useRef(null);
+  const polarChartRef = useRef(null);
+  const [barChartInstance, setBarChartInstance] = useState(null);
+  const [pieChartInstance, setPieChartInstance] = useState(null);
+  const [polarChartInstance, setPolarChartInstance] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -105,6 +212,47 @@ function App() {
 
     fetchData();
   }, []);
+
+  const applyFilters = (data) => {
+    let filteredData = [...data];
+
+    if (yearFilter && endYearFilter) {
+      filteredData = filteredData.filter(item =>
+        item.startyear >= yearFilter && item.endyear <= endYearFilter
+      );
+    } else if (yearFilter) {
+      filteredData = filteredData.filter(item => item.startyear === yearFilter);
+    } else if (endYearFilter) {
+      filteredData = filteredData.filter(item => item.endyear === endYearFilter);
+    }
+
+    if (topicsFilter) {
+      filteredData = filteredData.filter(item => item.topics.includes(topicsFilter));
+    }
+    if (sectorFilter) {
+      filteredData = filteredData.filter(item => item.sector === sectorFilter);
+    }
+    if (regionFilter) {
+      filteredData = filteredData.filter(item => item.region === regionFilter);
+    }
+    if (PESTFilter) {
+      filteredData = filteredData.filter(item => item.pestle === PESTFilter);
+    }
+    if (sourceFilter) {
+      filteredData = filteredData.filter(item => item.source === sourceFilter);
+    }
+    if (SWOTFilter) {
+      filteredData = filteredData.filter(item => item.swot === SWOTFilter);
+    }
+    if (countryFilter) {
+      filteredData = filteredData.filter(item => item.country === countryFilter);
+    }
+    if (cityFilter) {
+      filteredData = filteredData.filter(item => item.city === cityFilter);
+    }
+
+    return filteredData;
+  };
 
   const processDataForChart = () => {
     if (!data || data.length === 0) {
@@ -149,69 +297,109 @@ function App() {
     };
   };
 
-  const applyFilters = (data) => {
-    let filteredData = [...data];
-    if (yearFilter) {
-      filteredData = filteredData.filter(item => item.startyear === yearFilter);
+  const processPieData = () => {
+    if (!data || data.length === 0) {
+      return {
+        labels: [],
+        datasets: [],
+      };
     }
-    if (endYearFilter) {
-      filteredData = filteredData.filter(item => item.endyear === endYearFilter);
-    }
-    if (topicsFilter) {
-      filteredData = filteredData.filter(item => item.topics.includes(topicsFilter));
-    }
-    if (sectorFilter) {
-      filteredData = filteredData.filter(item => item.sector === sectorFilter);
-    }
-    if (regionFilter) {
-      filteredData = filteredData.filter(item => item.region === regionFilter);
-    }
-    if (PESTFilter) {
-      filteredData = filteredData.filter(item => item.pestle === PESTFilter);
-    }
-    if (sourceFilter) {
-      filteredData = filteredData.filter(item => item.source === sourceFilter);
-    }
-    if (SWOTFilter) {
-      filteredData = filteredData.filter(item => item.swot === SWOTFilter);
-    }
-    if (countryFilter) {
-      filteredData = filteredData.filter(item => item.country === countryFilter);
-    }
-    if (cityFilter) {
-      filteredData = filteredData.filter(item => item.city === cityFilter);
-    }
-    return filteredData;
+  
+
+
+
+
+
+    const filteredData = applyFilters(data);
+    const labels = Array.from(new Set(filteredData.map(item => item.country)));
+    const values = labels.map(label => filteredData.filter(item => item.country === label).length);
+
+    return {
+      labels: labels,
+      datasets: [{
+        data: values,
+        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#FF9F40', '#4BC0C0', '#F56C42'],
+      }],
+    };
   };
 
+
+
+
+  const processPolarData = () => {
+    if (!data || data.length === 0) {
+      return {
+        labels: [],
+        datasets: [],
+      };
+    }
+    const filteredData = applyFilters(data);
+    const labels = Array.from(new Set(filteredData.map(item => item.region)));
+    const values = labels.map(label => filteredData.filter(item => item.region === label).length);
+
+    return {
+      labels: labels,
+      datasets: [{
+        data: values,
+        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#FF9F40', '#4BC0C0', '#F56C42'],
+      }],
+    };
+  };
+
+
+
+
   const chartData = processDataForChart();
+  const pieData = processPieData();
+  const polarData = processPolarData();
 
   useEffect(() => {
-    if (chartRef.current && data.length > 0) {
-      if (chartInstance) {
-        chartInstance.destroy();
-      }
+    const createOrUpdateChart = (chartRef, chartInstance, chartType, chartData) => {
+      if (chartRef.current && data.length > 0) {
+        if (chartInstance) {
+          chartInstance.destroy();
+        }
 
-      const newChartInstance = new Chart(chartRef.current, {
-        type: 'bar',
-        data: chartData,
-        options: {
-          maintainAspectRatio: false,
-          scales: {
-            yAxes: [{
-              ticks: {
-                beginAtZero: true,
+        const newChartInstance = new Chart(chartRef.current, {
+          type: chartType,
+          data: chartData,
+          options: {
+            maintainAspectRatio: false,
+            responsive: true,
+            scales: {
+              x: {
+                stacked: true,
+                ticks: {
+                  beginAtZero: true,
+                },
               },
-            }],
+              y: {
+                stacked: true,
+                ticks: {
+                  beginAtZero: true,
+                },
+              },
+            },
           },
-        },
-      });
+        });
 
-      setChartInstance(newChartInstance);
+        if (chartType === 'bar') {
+          setBarChartInstance(newChartInstance);
+        } else if (chartType === 'doughnut') {
+          setPieChartInstance(newChartInstance);
+        } else if (chartType === 'polarArea') {
+          setPolarChartInstance(newChartInstance);
+        }
 
-      const canvas = chartRef.current;
-      canvas.classList.add('fadeIn');
-    }
+        const canvas = chartRef.current;
+        canvas.classList.add('fadeIn');
+      }
+    };
+
+    createOrUpdateChart(barChartRef, barChartInstance, 'bar', chartData);
+    createOrUpdateChart(pieChartRef, pieChartInstance, 'doughnut', pieData);
+    createOrUpdateChart(polarChartRef, polarChartInstance, 'polarArea', polarData);
+
   }, [data, yearFilter, endYearFilter, topicsFilter, sectorFilter, regionFilter, PESTFilter, sourceFilter, SWOTFilter, countryFilter, cityFilter]);
 
   const handleFilterChange = (event) => {
@@ -254,11 +442,11 @@ function App() {
 
   return (
     <AppContainer>
-      <Title>Data Visualization Dashboard</Title>
+      <Title style={{color:"#766cf2"}}>Data Visualization Dashboard</Title>
       {data.length > 0 && (
         <FiltersContainer>
           <FilterLabel>
-            Select Year:
+            Select Start Year:
             <select name="yearFilter" value={yearFilter} onChange={handleFilterChange}>
               <option value="">All</option>
               {Array.from(new Set(data.map(item => item.startyear))).map(year => (
@@ -350,9 +538,17 @@ function App() {
         </FiltersContainer>
       )}
       {data.length > 0 && (
-        <ChartContainer>
-          <AnimatedCanvas height={500} ref={chartRef}></AnimatedCanvas>
-        </ChartContainer>
+        <ChartsContainer>
+          <ChartContainer>
+            <AnimatedCanvas height={500} ref={barChartRef}></AnimatedCanvas>
+          </ChartContainer>
+          <Chart2Container>
+            <AnimatedCanvas height={500} ref={pieChartRef}></AnimatedCanvas>
+          </Chart2Container>
+          <PolarChartContainer>
+            <AnimatedCanvas height={300} ref={polarChartRef}></AnimatedCanvas>
+          </PolarChartContainer>
+        </ChartsContainer>
       )}
     </AppContainer>
   );
